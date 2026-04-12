@@ -1,0 +1,119 @@
+# Research Inclination — shared context injected into every agent's system prompt.
+# Edit this file to change the research theme for all agents at once.
+
+title: "Combining Causal Inference with LLMs and Agents"
+
+description: |
+  We are a small research group focused on causal inference. Our goal is to find
+  research opportunities at the intersection of causality and large language models
+  or AI agents. We are NOT interested in scaling pre-training. We ARE interested in
+  using causal tools to improve LLM reasoning, robustness, alignment, or to use
+  LLMs as tools inside causal pipelines.
+
+  The ideal paper provides a hook for applying or extending causal methods
+  (SCMs, do-calculus, instrumental variables, difference-in-differences, causal
+  representation learning) to a problem in the LLM or agent space.
+
+researcher_profile: |
+  Small team (1–2 researchers). Strong background in causal inference.
+  Moderate ML engineering capacity — no large-scale GPU clusters.
+  Prefer theory + small experiment setups over large benchmarks.
+  Publications target top ML/AI venues (NeurIPS, ICML, ICLR, ACL).
+
+non_goals:
+  - Pre-training or fine-tuning LLMs from scratch on massive data
+  - Pure NLP tasks with no causal framing
+  - Hardware, systems, or infrastructure research
+  - Papers requiring >8 A100s to reproduce key results
+  - Research that requires large-scale evaluation on benchmarks
+
+goals:
+  - Causal reasoning in LLM inference pipelines
+  - Using causal methods to diagnose or improve LLM behavior (robustness, spurious correlations)
+  - Causal structure in agent decision-making and planning
+  - Identifiability and confounding in LLM-generated or human-feedback data
+  - Causal representation learning applied to LLM embeddings
+
+topics:
+  # --- LLM feedback, evaluation, and RLHF ---
+  - Statistical ranking from pairwise interaction or preference data
+  - Identifiability of causal effects from LLM-generated or annotator preference labels
+  - Reward model confounding and identifiability in reinforcement learning from human feedback
+  - Off-policy evaluation of response selection policies from logged user feedback
+  - Doubly robust estimation for offline evaluation of agent decision policies
+  - Instrumental variable estimation for RLHF with noisy or strategically biased human annotations
+  - Sensitivity analysis for selection bias due to missing or selectively collected outcomes
+
+  # --- Semi-supervised inference and LLM-as-judge---
+  - Prediction-powered inference with LLM-generated labels for causal and statistical estimation
+  - Semi-supervised causal effect estimation with partially labeled or partially observed data
+  - Validity and calibration of LLM-based outcome proxies for downstream inference
+  - Off-policy evaluation with semi-supervised reward annotation from LLM judges
+  - Policy learning with semi-supervised or partially observed agent trajectories
+  - Causal effect estimation when outcome labels are imputed by a learned model
+  - Uncertainty-aware prediction-powered inference under distributional mismatch
+  - Selection bias correction for LLM-annotated datasets used in causal analysis
+  - Semi-supervised off-policy learning with LLM-labeled behavior data
+
+  # --- Prompting, intervention, and in-context learning ---
+  - Counterfactual estimation of prompt or intervention effects on downstream quality
+  - Causal effect of in-context examples on LLM output quality and calibration
+  - Causal mediation analysis for chain-of-thought reasoning intermediates
+  - Treatment effect estimation with text covariates using representation learning
+
+  # --- Agent and policy learning from observational logs ---
+  - Policy learning from observational data
+  - Off-policy policy learning with delayed rewards
+  - Dynamic treatment regime learning in longitudinal observational data
+  - Sequential decision-making with partial observability and observational logs
+  - Policy learning for model routing under observational interaction logs
+  - Meta-learning for policy value estimation across related tasks
+  - Off-policy evaluation from logged bandit feedback
+  - Off-policy evaluation under hidden confounding
+  - Policy learning under fairness or resource constraints
+  - Robust policy optimization under distribution shift
+
+  # --- Causal representation and structure learning for LLMs ---
+  - Causal representation learning for language model embeddings
+  - Causal structure discovery for downstream treatment effect identification
+  - Causal discovery from multi-turn dialogue and agent interaction logs
+  - Causal invariance for out-of-distribution generalization in language models
+  - Spurious correlation detection in LLM reasoning via causal intervention methods
+  - Counterfactual data augmentation for causal robustness in LLM fine-tuning
+
+  # --- Heterogeneous treatment effects and CATE ---
+  - Doubly robust meta-learners for conditional average treatment effects
+  - Heterogeneous treatment effect estimation in longitudinal data
+  - Model selection for heterogeneous treatment effect estimators with observational data
+  - Conditional average treatment effect estimation with instrumental variables
+  - Uncertainty quantification for conditional average treatment effects with conformal prediction
+  - Conformalized policy learning with finite-sample coverage guarantees
+  - Debiased machine learning for treatment effects under nuisance misspecification
+  - Semiparametric efficiency for treatment effect estimation with high-dimensional nuisance models
+  - Active learning for treatment effect estimation under labeling budgets
+
+  # --- Confounding, identification, and sensitivity ---
+  - Sensitivity analysis with unmeasured confounding
+  - Partial identification of treatment effects under bounded unmeasured confounding
+  - Negative control methods for unmeasured confounding adjustment
+  - Proximal causal inference with proxy confounders
+  - Sensitivity analysis for average treatment effects
+  - Causal effect estimation with missing-not-at-random covariates
+  - Treatment effect estimation with noisy or mismeasured outcomes
+
+  # --- Surrogates, transportability, and distribution shift ---
+  - Treatment effect estimation with surrogates and missing data
+  - Surrogate index construction for long-term treatment effect prediction
+  - Transportability of treatment effects across populations or deployment sites
+  - Domain adaptation for conditional average treatment effects under covariate shift
+
+  # --- Interference, uplift, and network effects ---
+  - Treatment effect estimation under interference in multi-agent or social network settings
+  - Uplift modeling for binary treatment assignment with observational data
+
+  # --- Mediation, dynamics, and advanced identification ---
+  - Mediation analysis with post-treatment confounders in multi-step LLM pipelines
+  - Doubly robust estimation for dynamic treatment effects
+  - Instrumental variable estimation with weak or invalid instruments
+  - Counterfactual ranking from pairwise comparison data
+  - Do-calculus for intervention planning in agentic LLM decision pipelines

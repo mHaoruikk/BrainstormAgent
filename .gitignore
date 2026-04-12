@@ -1,0 +1,12 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python caches and local build artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Local tool state
+.claude/settings.local.json

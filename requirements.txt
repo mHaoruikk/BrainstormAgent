@@ -1,0 +1,16 @@
+# Python 3.11 recommended (conda create -n brainstorm python=3.11)
+# 3.11 is the minimum for pydantic-ai; 3.12 also works. Avoid 3.13 (google-generativeai incompatibility).
+
+pydantic-ai>=0.0.14
+pydantic-settings>=2.5
+pydantic>=2.8
+typer>=0.12
+arxiv>=2.1
+pypdf>=4.3
+httpx>=0.27
+pyyaml>=6.0
+python-dotenv>=1.0
+rich>=13.7
+openai>=1.35
+anthropic>=0.30
+google-generativeai>=0.7

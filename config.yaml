@@ -1,0 +1,48 @@
+# BrainstormAgent Configuration
+# Model strings follow PydanticAI format: "openai:model-name", "anthropic:model-name", "google-gla:model-name"
+
+models:
+  # Used only for PDF metadata extraction — cheap model is fine
+  ingestion: "openai:gpt-4o-mini"
+  # Initial filter agent
+  filter: "anthropic:claude-opus-4-6"
+  # Math summary: gpt-5.4-mini with medium reasoning effort
+  summary: "openai:gpt-5.4-mini"
+  # Brainstorm and critique agents are configured as lists.
+  # For now we test with one brainstorm model and one critic model.
+  brainstorm:
+    - model: "anthropic:claude-opus-4-6"
+      label: "Claude"
+    #- model: "openai:gpt-5.4"
+    #  label: "GPT-5.4"
+  critic:
+    - model: "openai:gpt-5.4" # or gpt-4o for a cheaper but less rigorous critique
+      label: "GPT-5.4"
+
+  proposal_writer: "anthropic:claude-opus-4-6"
+
+# Minimum ratings for the Proposal Writer to trigger
+thresholds:
+  min_novelty_rating: 3.0
+  min_viability_rating: 3.0
+
+# Brief researcher profile — injected into every agent's system prompt
+researcher:
+  name: "Research Team"
+  profile_summary: >
+    Small causal inference research group (1–2 researchers). Strong background in
+    causal inference (causal machine learning, policy-learning, semiparametric inference, orthogonal estimator, efficient statistical inference). Moderate ML
+    engineering capacity — no large-scale GPU clusters. Prefer theory + small
+    experiment setups over large benchmarks.
+
+notion:
+  database_name: "Research Papers"
+
+filter:
+  use_full_text: true   # fetch full PDF for uncertain cases (Mode 2)
+                        # set to false to always escalate uncertain → Needs Review
+
+brainstorm:
+  max_rounds: 3         # maximum brainstorm↔critique iterations per paper
+  include_pdf: true     # include raw PDF text in brainstorm context (set false to save tokens)
+  max_input_tokens: 400000  # safety margin below Claude's 450K limit; rounds exceeding this are compacted
