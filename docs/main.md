@@ -295,16 +295,13 @@ class FilterResult(BaseModel):
     causal_relevance: Literal["High", "Medium", "Low", "None"]
 
 class BrainstormResult(BaseModel):
-    model_used: str
-    angles: list[ResearchAngle]     # see below
-    full_report: str                # Markdown, written as Notion child page
-
-class ResearchAngle(BaseModel):
+    paper_summary: str
+    response_to_critique: str
     title: str
     description: str
     novelty_rationale: str
-    required_data_or_method: str
     solution_sketch: str
+    experiment_plan: str
     open_questions: list[str]
 
 class CritiqueResult(BaseModel):

@@ -28,11 +28,11 @@ import httpx
 from pypdf import PdfReader
 from pydantic import BaseModel
 
-from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModelSettings
 
 from agents.base import BaseAgent
 from config import config
+from llm_clients import make_client
 from models.paper import FilterResult
 from notion.client import NotionClient
 from notion.schema import (
@@ -75,15 +75,17 @@ class InitialFilterAgent(BaseAgent):
         super().__init__(instruction_file="filter_agent.yaml")
         self.notion = notion
         self._use_full_text: bool = config.filter.use_full_text
-        self._agent = self.make_agent(
-            model=config.models.filter,
+        self._agent = self.make_client(
+            agent_key="filter",
             output_type=FilterResult,
             extra_prompt=self._build_rubric_prompt(),
         )
-        # Separate agent for math summarization — no rubric, no structured output,
-        # uses a cheaper reasoning model (o4-mini default = medium/standard thinking).
-        self._summary_agent: Agent[None, str] = Agent(
-            model=config.models.summary,
+        # Separate client for math summarization — free-text output, standalone
+        # system prompt (not the rubric-heavy one BaseAgent assembles). In api
+        # mode uses OpenAI reasoning_effort=medium; in local mode that setting
+        # is ignored (Claude Code / Codex don't expose an equivalent knob).
+        self._summary_agent = make_client(
+            agent_key="summary",
             output_type=str,
             system_prompt=_SUMMARY_SYSTEM_PROMPT,
             model_settings=OpenAIModelSettings(reasoning_effort="medium"),

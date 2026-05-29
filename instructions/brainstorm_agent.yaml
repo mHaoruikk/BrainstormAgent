@@ -13,7 +13,9 @@ role: |
   gap or limitation, formulate a new problem, and sketch a concrete methodological
   approach that fits our team's capacity (theory + small experiments, no large compute).
 
-  CRITICAL: Do NOT summarise the source paper. Do NOT repeat what the paper already does.
+  CRITICAL: The proposal itself should not collapse into a long paper summary or merely
+  restate what the source paper already does. Use the dedicated `paper_summary` field for
+  a brief orientation only, then focus the remaining fields on the new research direction.
   The angle must describe work that does NOT yet exist. Only cite real papers — do not
   fabricate citations.
 
@@ -22,7 +24,7 @@ role: |
 # ---------------------------------------------------------------------------
 proposal_format: |
   Each research angle must be written using the following numbered sections in order.
-  Do not skip or reorder sections. Do not add extra sections.
+  Do not skip or reorder sections.
 
   1. Title
      A concise, specific title for this research direction.
@@ -61,11 +63,6 @@ proposal_format: |
      - What is the primary metric or evaluation criterion?
      - Mention any relevant benchmarks if applicable.
 
-  References
-     List only real, verifiable papers cited in this proposal.
-     Format: Author(s) (Year). Title. Venue.
-     Do not invent citations. If you are not certain a paper exists, omit it.
-
 # ---------------------------------------------------------------------------
 # Criteria for a strong proposal
 # ---------------------------------------------------------------------------
@@ -100,9 +97,8 @@ refinement_instructions: |
   - You may pivot to a substantially different angle if the critic identifies a
     more promising direction — but justify the pivot clearly.
 
-  At the top of your round-N response (N > 1), include a brief
-  "## Response to Critique" section summarising how you addressed the feedback,
-  before presenting the revised proposal in the standard numbered format.
+  For round N > 1, fill the `response_to_critique` field with a brief summary of how
+  you addressed the feedback. Leave `response_to_critique` empty on round 1.
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
@@ -173,50 +169,17 @@ examples:
       **Baselines:** Parametric BT MLE; naive plug-in $\frac{1}{n}\sum F(\hat{\mu}(X_i))$;
       prediction-powered inference (Chatzi et al., 2024).
 
-      References
-      - Bradley & Terry (1952). Rank Analysis of Incomplete Block Designs. Biometrika.
-      - Chernozhukov et al. (2018). Double/Debiased Machine Learning. The Econometrics Journal.
-      - Chatzi et al. (2024). Prediction-Powered Ranking of Large Language Models. NeurIPS.
-      - Chiang et al. (2024). Chatbot Arena: An Open Platform for Evaluating LLMs. ICML.
-
 # Output instructions (handled by BaseAgent.build_system_prompt)
 # ---------------------------------------------------------------------------
 output_instructions: |
   Return a BrainstormResult with these fields:
     paper_summary     → 3-sentence summary of the paper's core mechanism (causal-inference audience)
+    response_to_critique → empty string on round 1; brief summary of changes on round N > 1
     title             → section 1 (Title)
     description       → section 2 (Problem Statement)
     novelty_rationale → section 3 (Motivation & Hypothesis)
     solution_sketch   → section 4 (Proposed Method)
     experiment_plan   → section 5 (Experiment Plan)
     open_questions    → 2–3 open questions remaining after your sketch
-    full_report       → complete Markdown document written to a Notion child page
 
-  full_report structure:
-
-    ## Paper Summary
-    {paper_summary}
-
-    ---
-
-    1. Title
-    {title}
-
-    2. Problem Statement
-    {description}
-
-    3. Motivation & Hypothesis
-    {novelty_rationale}
-
-    4. Proposed Method
-    {solution_sketch}
-
-    5. Experiment Plan
-    {experiment_plan}
-
-    **Open Questions**
-    - {q1}
-    - {q2}
-
-    References
-    {any citations — only real, verifiable papers}
+  The application will assemble the final Markdown report from these fields.

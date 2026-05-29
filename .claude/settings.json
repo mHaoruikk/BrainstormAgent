@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:papercopilot.com)",
+      "WebFetch(domain:openreview.net)",
+      "Bash(python -c ':*)",
+      "Bash(python -c \"from config import config; print\\('clients:', config.clients\\); print\\('brainstorm clients:', config.clients.brainstorm\\); print\\('critic clients:', config.clients.critic\\)\")",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

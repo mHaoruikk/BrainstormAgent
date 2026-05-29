@@ -5,9 +5,9 @@ models:
   # Used only for PDF metadata extraction — cheap model is fine
   ingestion: "openai:gpt-4o-mini"
   # Initial filter agent
-  filter: "anthropic:claude-opus-4-6"
+  filter: "gpt-5.4-mini" #"anthropic:claude-opus-4-6"
   # Math summary: gpt-5.4-mini with medium reasoning effort
-  summary: "openai:gpt-5.4-mini"
+  summary: "openai:gpt-5-mini"
   # Brainstorm and critique agents are configured as lists.
   # For now we test with one brainstorm model and one critic model.
   brainstorm:
@@ -15,16 +15,38 @@ models:
       label: "Claude"
     #- model: "openai:gpt-5.4"
     #  label: "GPT-5.4"
+    # Create a fast model for testing
+    # - model: "anthropic:claude-haiku-4-5-20251001"
+    #  label: "Claude Haiku"
   critic:
     - model: "openai:gpt-5.4" # or gpt-4o for a cheaper but less rigorous critique
       label: "GPT-5.4"
 
   proposal_writer: "anthropic:claude-opus-4-6"
 
+# Per-agent client mode. `api` uses the API model above via PydanticAI
+# (requires OPENAI_API_KEY / ANTHROPIC_API_KEY). `local` shells out to the
+# Claude Code or Codex CLI and bills against your subscription.
+#
+# `local_model` picks the model + provider for local mode. Prefix determines
+# the CLI: "claude:<name>" or "anthropic:<name>" → Claude Code;
+# "openai:<name>" → Codex. Bare "opus/sonnet/haiku" and "gpt-*/o-*" also work.
+#
+# For `brainstorm` and `critic` the list length must match models.<agent>.
+clients:
+  ingestion:       {mode: api, local_model: "claude:haiku"}
+  filter:          {mode: api, local_model: "claude:sonnet"}
+  summary:         {mode: api, local_model: "claude:sonnet"}
+  brainstorm:
+    - {mode: api, local_model: "claude:opus"}
+  critic:
+    - {mode: api, local_model: "openai:gpt-5"}
+  proposal_writer: {mode: api, local_model: "claude:opus"}
+
 # Minimum ratings for the Proposal Writer to trigger
 thresholds:
-  min_novelty_rating: 3.0
-  min_viability_rating: 3.0
+  min_novelty_rating: 4.0
+  min_viability_rating: 4.0
 
 # Brief researcher profile — injected into every agent's system prompt
 researcher:
@@ -43,6 +65,6 @@ filter:
                         # set to false to always escalate uncertain → Needs Review
 
 brainstorm:
-  max_rounds: 3         # maximum brainstorm↔critique iterations per paper
+  max_rounds: 1         # maximum brainstorm↔critique iterations per paper
   include_pdf: true     # include raw PDF text in brainstorm context (set false to save tokens)
   max_input_tokens: 400000  # safety margin below Claude's 450K limit; rounds exceeding this are compacted

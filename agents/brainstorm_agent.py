@@ -19,6 +19,7 @@ using the strongest final critique across all configured model pairs.
 from __future__ import annotations
 
 import tempfile
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -26,6 +27,7 @@ from typing import Literal
 import httpx
 from pypdf import PdfReader
 from pydantic import BaseModel
+from pydantic_ai import UnexpectedModelBehavior, capture_run_messages
 from rich.console import Console
 
 from agents.base import BaseAgent
@@ -100,13 +102,14 @@ class BrainstormPipeline(BaseAgent):
             _AgentRunner(
                 label=model_cfg.label,
                 model=model_cfg.model,
-                agent=self.make_agent(
-                    model=model_cfg.model,
+                agent=self.make_client(
+                    agent_key="brainstorm",
                     output_type=BrainstormResult,
                     extra_prompt=self._build_brainstorm_extra(),
+                    index=i,
                 ),
             )
-            for model_cfg in config.models.brainstorm
+            for i, model_cfg in enumerate(config.models.brainstorm)
         ]
 
         self._critic_base = BaseAgent(instruction_file="critic_agent.yaml")
@@ -114,13 +117,14 @@ class BrainstormPipeline(BaseAgent):
             _AgentRunner(
                 label=model_cfg.label,
                 model=model_cfg.model,
-                agent=self._critic_base.make_agent(
-                    model=model_cfg.model,
+                agent=self._critic_base.make_client(
+                    agent_key="critic",
                     output_type=CritiqueResult,
                     extra_prompt=self._build_critic_extra(),
+                    index=i,
                 ),
             )
-            for model_cfg in config.models.critic
+            for i, model_cfg in enumerate(config.models.critic)
         ]
 
     # ------------------------------------------------------------------
@@ -277,14 +281,23 @@ class BrainstormPipeline(BaseAgent):
                 f"[bold]{b_tokens:,}[/bold] tokens"
             )
 
-            try:
-                brainstorm_result: BrainstormResult = (
-                    brainstorm_runner.agent.run_sync(brainstorm_msg).output
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Brainstorm agent ({brainstorm_runner.label}) failed on round {page_round_num}: {exc}"
-                ) from exc
+            with capture_run_messages() as b_messages:
+                try:
+                    brainstorm_result: BrainstormResult = (
+                        brainstorm_runner.agent.run_sync(brainstorm_msg).output
+                    )
+                except UnexpectedModelBehavior as exc:
+                    _log_validation_failure(
+                        f"Brainstorm agent ({brainstorm_runner.label}) round {page_round_num}",
+                        exc, b_messages,
+                    )
+                    raise RuntimeError(
+                        f"Brainstorm agent ({brainstorm_runner.label}) failed on round {page_round_num}: {exc}"
+                    ) from exc
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Brainstorm agent ({brainstorm_runner.label}) failed on round {page_round_num}: {exc}"
+                    ) from exc
 
             critique_msg = self._build_critique_message(
                 brainstorm_result, rounds, round_num
@@ -299,14 +312,23 @@ class BrainstormPipeline(BaseAgent):
                 f"[bold]{c_tokens:,}[/bold] tokens"
             )
 
-            try:
-                critique_result: CritiqueResult = (
-                    critic_runner.agent.run_sync(critique_msg).output
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Critic agent ({critic_runner.label}) failed on round {page_round_num}: {exc}"
-                ) from exc
+            with capture_run_messages() as c_messages:
+                try:
+                    critique_result: CritiqueResult = (
+                        critic_runner.agent.run_sync(critique_msg).output
+                    )
+                except UnexpectedModelBehavior as exc:
+                    _log_validation_failure(
+                        f"Critic agent ({critic_runner.label}) round {page_round_num}",
+                        exc, c_messages,
+                    )
+                    raise RuntimeError(
+                        f"Critic agent ({critic_runner.label}) failed on round {page_round_num}: {exc}"
+                    ) from exc
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Critic agent ({critic_runner.label}) failed on round {page_round_num}: {exc}"
+                    ) from exc
 
             rounds.append((brainstorm_result, critique_result))
 
@@ -345,10 +367,14 @@ class BrainstormPipeline(BaseAgent):
     @staticmethod
     def _enforce_token_limit(msg: str, max_tokens: int, label: str) -> str:
         """
-        If the message exceeds max_tokens, compact it by:
-        1. Truncating the "Full Paper Text" section first (biggest chunk).
-        2. If still over, truncating older round histories.
-        3. As a last resort, hard-truncating the entire message.
+        Compact the message down to max_tokens in four escalating steps.
+
+        Step 1 — Shrink "Full Paper Text" progressively (50% → 25% → 10% → remove).
+        Step 2 — Shrink "Prior Brainstorm Sessions" progressively (last session only
+                  → first 25% of that → remove).  This is the main source of bloat
+                  on reruns.
+        Step 3 — Drop current-session round history older than the most recent round.
+        Step 4 — Hard-truncate the whole message as a last resort.
         """
         tokens = _estimate_tokens(msg)
         if tokens <= max_tokens:
@@ -359,47 +385,74 @@ class BrainstormPipeline(BaseAgent):
             f"({max_tokens:,}). Compacting...[/yellow]"
         )
 
-        # Step 1: Truncate the full paper text section
-        marker = "\n## Full Paper Text\n"
-        if marker in msg:
-            before, after = msg.split(marker, 1)
-            # Find the next section header
-            next_section = _find_next_section(after)
-            if next_section >= 0:
-                paper_text = after[:next_section]
-                remainder = after[next_section:]
-            else:
-                paper_text = after
-                remainder = ""
-
-            # Progressively shrink paper text
+        # ----------------------------------------------------------------
+        # Step 1: Shrink raw PDF text
+        # ----------------------------------------------------------------
+        pdf_marker = "\n## Full Paper Text\n"
+        if pdf_marker in msg:
+            before, after = msg.split(pdf_marker, 1)
+            next_sec = _find_next_section(after)
+            paper_text = after[:next_sec] if next_sec >= 0 else after
+            remainder = after[next_sec:] if next_sec >= 0 else ""
             for fraction in (0.5, 0.25, 0.1, 0.0):
                 if fraction > 0:
-                    keep_chars = int(len(paper_text) * fraction)
-                    truncated_paper = paper_text[:keep_chars] + "\n\n[... truncated for token limit ...]\n"
+                    cut = paper_text[:int(len(paper_text) * fraction)]
+                    snippet = cut + "\n\n[... truncated for token limit ...]\n"
                 else:
-                    truncated_paper = "[Full paper text omitted for token limit.]\n"
-                msg = before + marker + truncated_paper + remainder
+                    snippet = "[Full paper text omitted for token limit.]\n"
+                msg = before + pdf_marker + snippet + remainder
                 if _estimate_tokens(msg) <= max_tokens:
                     return msg
 
-        # Step 2: Compact older round histories — keep only the last round
+        # ----------------------------------------------------------------
+        # Step 2: Shrink prior brainstorm sessions (rerun bloat)
+        # ----------------------------------------------------------------
+        prior_marker = "\n## Prior Brainstorm Sessions\n"
+        if prior_marker in msg:
+            before, after = msg.split(prior_marker, 1)
+            next_sec = _find_next_section(after)
+            prior_text = after[:next_sec] if next_sec >= 0 else after
+            remainder = after[next_sec:] if next_sec >= 0 else ""
+
+            # Keep only the last session (find the last "---" separator)
+            last_sep = prior_text.rfind("\n\n---\n\n")
+            if last_sep >= 0:
+                last_session = prior_text[last_sep + 7:]  # skip separator
+                msg = before + prior_marker + last_session + remainder
+                _console.print("  [yellow]  → truncated prior sessions to last session only[/yellow]")
+                if _estimate_tokens(msg) <= max_tokens:
+                    return msg
+                prior_text = last_session  # shrink further below
+
+            # Keep only first 25% of prior text
+            cut = prior_text[:int(len(prior_text) * 0.25)]
+            msg = before + prior_marker + cut + "\n\n[... prior sessions truncated ...]\n" + remainder
+            if _estimate_tokens(msg) <= max_tokens:
+                return msg
+
+            # Remove entirely
+            msg = before + "\n[Prior brainstorm sessions omitted for token limit.]\n" + remainder
+            _console.print("  [yellow]  → prior sessions removed entirely[/yellow]")
+            if _estimate_tokens(msg) <= max_tokens:
+                return msg
+
+        # ----------------------------------------------------------------
+        # Step 3: Drop current-session round history, keep only latest task
+        # ----------------------------------------------------------------
         for round_marker in ("## Round 1 — Your Proposal", "## Round 1 — Critique"):
             if round_marker in msg:
                 idx = msg.find(round_marker)
-                # Find the start of the last round section
-                last_task_marker = "## Your Task for Round"
-                task_idx = msg.rfind(last_task_marker)
+                task_idx = msg.rfind("## Your Task for Round")
                 if task_idx > idx:
-                    # Keep everything before the rounds and from the last task onward
-                    rounds_start = idx
                     compact_note = "[... earlier rounds omitted for token limit ...]\n\n"
-                    msg = msg[:rounds_start] + compact_note + msg[task_idx:]
+                    msg = msg[:idx] + compact_note + msg[task_idx:]
                     if _estimate_tokens(msg) <= max_tokens:
                         return msg
 
-        # Step 3: Hard truncate
-        max_chars = max_tokens * 4  # ~4 chars per token
+        # ----------------------------------------------------------------
+        # Step 4: Hard truncate
+        # ----------------------------------------------------------------
+        max_chars = max_tokens * 4
         msg = msg[:max_chars] + "\n\n[... hard-truncated for token limit ...]"
         return msg
 
@@ -527,7 +580,7 @@ class BrainstormPipeline(BaseAgent):
         if prior_rounds:
             parts.append("\n---\n")
             for i, (br, cr) in enumerate(prior_rounds, 1):
-                parts.append(f"## Round {i} — Your Proposal\n{br.full_report}")
+                parts.append(f"## Round {i} — Your Proposal\n{_format_brainstorm_report(br)}")
                 parts.append(f"\n## Round {i} — Critique\n{cr.full_report}")
 
             parts.append(f"\n---\n## Your Task for Round {round_num}")
@@ -542,6 +595,8 @@ class BrainstormPipeline(BaseAgent):
                 "Follow the standard proposal format in your system prompt."
             )
 
+        parts.append("\n---\n")
+        parts.append(_brainstorm_output_structure(round_num))
         return "\n".join(parts)
 
     def _build_critique_message(
@@ -551,7 +606,7 @@ class BrainstormPipeline(BaseAgent):
         round_num: int,
     ) -> str:
         """Build the user message for the critique agent."""
-        parts = [f"## Proposal (Round {round_num})\n{brainstorm_result.full_report}"]
+        parts = [f"## Proposal (Round {round_num})\n{_format_brainstorm_report(brainstorm_result)}"]
 
         if prior_rounds:
             parts.append("\n---\n")
@@ -678,11 +733,76 @@ def _format_round_page(
         f"- Critic model: {critic_label} ({critic_model})\n\n"
         f"---\n\n"
         f"## Proposal\n\n"
-        f"{brainstorm.full_report}\n\n"
+        f"{_format_brainstorm_report(brainstorm)}\n\n"
         f"---\n\n"
         f"## Critique\n\n"
         f"{critique.full_report}"
     )
+
+
+def _brainstorm_output_structure(round_num: int) -> str:
+    """Return the exact structured-output contract for the brainstorm agent."""
+    response_rule = (
+        "Set `response_to_critique` to an empty string."
+        if round_num == 1
+        else "Fill `response_to_critique` with a brief summary of what changed in response to the prior critique."
+    )
+    return (
+        "IMPORTANT: Return only a structured `BrainstormResult` with exactly these fields:\n"
+        "- `paper_summary`: 3-sentence summary of the paper's core mechanism for a causal-inference audience.\n"
+        f"- `response_to_critique`: {response_rule}\n"
+        "- `title`: section 1 title.\n"
+        "- `description`: section 2 problem statement.\n"
+        "- `novelty_rationale`: section 3 motivation and hypothesis.\n"
+        "- `solution_sketch`: section 4 proposed method.\n"
+        "- `experiment_plan`: section 5 experiment plan.\n"
+        "- `open_questions`: list of 2-3 open questions.\n"
+    )
+
+
+def _format_brainstorm_report(brainstorm: BrainstormResult) -> str:
+    """Assemble the Markdown proposal page from structured brainstorm fields."""
+    sections = [
+        "## Paper Summary",
+        brainstorm.paper_summary.strip(),
+    ]
+
+    if brainstorm.response_to_critique.strip():
+        sections.extend([
+            "",
+            "## Response to Critique",
+            brainstorm.response_to_critique.strip(),
+        ])
+
+    sections.extend([
+        "",
+        "---",
+        "",
+        "1. Title",
+        brainstorm.title.strip(),
+        "",
+        "2. Problem Statement",
+        brainstorm.description.strip(),
+        "",
+        "3. Motivation & Hypothesis",
+        brainstorm.novelty_rationale.strip(),
+        "",
+        "4. Proposed Method",
+        brainstorm.solution_sketch.strip(),
+        "",
+        "5. Experiment Plan",
+        brainstorm.experiment_plan.strip(),
+        "",
+        "**Open Questions**",
+    ])
+
+    open_questions = brainstorm.open_questions or []
+    if open_questions:
+        sections.extend(f"- {question}" for question in open_questions)
+    else:
+        sections.append("- None listed.")
+
+    return "\n".join(sections)
 
 
 def _get_title(props: dict) -> str:
@@ -742,6 +862,73 @@ def _extract_pdf_text(path: Path, max_pages: int = 50) -> str:
 def _estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 characters per token for English text."""
     return len(text) // 4
+
+
+def _log_validation_failure(
+    label: str,
+    exc: "UnexpectedModelBehavior",
+    messages: list,
+) -> None:
+    """
+    Print a detailed breakdown of a PydanticAI validation failure to the console.
+
+    Shows each retry attempt: the validation error PydanticAI sent back to the
+    model, and the raw model response that triggered it.
+    """
+    _console.print(f"\n  [red bold]Validation failure — {label}[/red bold]")
+    _console.print(f"  [red]{exc}[/red]")
+
+    if not messages:
+        _console.print("  [dim](no message history captured)[/dim]")
+        return
+
+    retry_count = 0
+    for msg in messages:
+        msg_type = type(msg).__name__
+        parts = getattr(msg, "parts", [])
+        for part in parts:
+            part_type = type(part).__name__
+
+            if part_type == "RetryPromptPart":
+                retry_count += 1
+                content = part.content
+                if isinstance(content, list):
+                    # Pydantic ValidationError details as a list of ErrorDetails dicts
+                    from rich.markup import escape as _rich_escape
+                    error_lines = []
+                    for err in content:
+                        loc = " → ".join(str(x) for x in err.get("loc", []))
+                        loc_display = _rich_escape(loc) if loc else "(root)"
+                        msg = _rich_escape(str(err.get("msg", "")))
+                        err_type = _rich_escape(str(err.get("type", "")))
+                        error_lines.append(f"    • field=[cyan]{loc_display}[/cyan] {msg} [dim](type={err_type})[/dim]")
+                    _console.print(f"\n  [yellow]Retry {retry_count} — validation errors:[/yellow]")
+                    for line in error_lines:
+                        _console.print(line)
+                else:
+                    _console.print(f"\n  [yellow]Retry {retry_count} — reason:[/yellow] {content}")
+
+            elif part_type == "TextPart" and msg_type == "ModelResponse":
+                text = getattr(part, "content", "")
+                if text.strip():
+                    _console.print(f"\n  [dim]Model plain-text response ({len(text)} chars):[/dim]")
+                    _console.print(text[:1000] + ("…" if len(text) > 1000 else ""))
+
+            elif part_type == "ToolCallPart":
+                args_str = getattr(part, "args_as_json_str", lambda: "")()
+                if args_str:
+                    # Try to parse and show which required fields are present/absent
+                    import json as _json
+                    _console.print(f"\n  [dim]Model tool call args ({len(args_str)} chars total):[/dim]")
+                    try:
+                        parsed = _json.loads(args_str)
+                        present = list(parsed.keys())
+                        _console.print(f"  Fields present: [green]{', '.join(present)}[/green]")
+                    except _json.JSONDecodeError as je:
+                        _console.print(f"  [red]JSON parse error at char {je.pos}:[/red] {je.msg}")
+                        _console.print(f"  Near: …{args_str[max(0, je.pos-80):je.pos+40]}…")
+                    preview = args_str[:800] + ("…" if len(args_str) > 800 else "")
+                    _console.print(f"  [dim]First 800 chars:[/dim]\n  {preview}")
 
 
 import re as _re

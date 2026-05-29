@@ -39,6 +39,21 @@ class ModelsConfig(BaseModel):
     proposal_writer: str
 
 
+class ClientConfig(BaseModel):
+    """Per-agent client selection: API mode vs local CLI (subscription)."""
+    mode: str = "api"          # "api" or "local"
+    local_model: str = ""      # used when mode == "local"
+
+
+class ClientsConfig(BaseModel):
+    ingestion: ClientConfig = ClientConfig()
+    filter: ClientConfig = ClientConfig()
+    summary: ClientConfig = ClientConfig()
+    brainstorm: list[ClientConfig] = []
+    critic: list[ClientConfig] = []
+    proposal_writer: ClientConfig = ClientConfig()
+
+
 class ThresholdsConfig(BaseModel):
     min_novelty_rating: float = 3.0
     min_viability_rating: float = 3.0
@@ -65,6 +80,7 @@ class BrainstormConfig(BaseModel):
 
 class AppConfig(BaseModel):
     models: ModelsConfig
+    clients: ClientsConfig = ClientsConfig()
     thresholds: ThresholdsConfig
     researcher: ResearcherConfig
     notion: NotionConfig

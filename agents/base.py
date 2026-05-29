@@ -15,9 +15,9 @@ from typing import Any, TypeVar
 
 import yaml
 from pydantic import BaseModel
-from pydantic_ai import Agent
 
 from config import config, settings
+from llm_clients import LLMClient, make_client
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -95,29 +95,41 @@ class BaseAgent:
         return "\n\n".join(parts)
 
     # ------------------------------------------------------------------
-    # PydanticAI Agent factory
+    # LLM client factory (mode-aware: api vs local subscription CLI)
     # ------------------------------------------------------------------
 
-    def make_agent(
+    def make_client(
         self,
-        model: str,
+        agent_key: str,
         output_type: type[T],
         extra_prompt: str = "",
+        *,
+        index: int | None = None,
+        model_settings: Any = None,
         retries: int = 3,
-    ) -> Agent:
+    ) -> LLMClient:
         """
-        Create a PydanticAI Agent with the assembled system prompt.
+        Return an LLMClient wired to the backend selected in config.clients.<agent_key>.
+
+        Usage mirrors the previous PydanticAI agent contract — call
+        `client.run_sync(msg).output` to get the typed result.
 
         Args:
-            model: PydanticAI model string, e.g. "openai:gpt-4o"
-            output_type: Pydantic model class for structured output
-            extra_prompt: Additional instructions appended to the system prompt
-            retries: Max validation retries (default 3)
+            agent_key: matches a `clients.<key>` entry in config.yaml.
+                       Use `index` for list-configured agents ("brainstorm", "critic").
+            output_type: Pydantic model class for structured output, or `str`
+                         for free-text agents.
+            extra_prompt: appended to the assembled system prompt.
+            index: required for "brainstorm" / "critic"; must be None otherwise.
+            model_settings: forwarded to PydanticAI in api mode (ignored in local mode).
+            retries: validation/retry budget.
         """
-        return Agent(
-            model=model,
+        return make_client(
+            agent_key=agent_key,
             output_type=output_type,
             system_prompt=self.build_system_prompt(extra=extra_prompt),
+            index=index,
+            model_settings=model_settings,
             retries=retries,
         )
 
@@ -147,6 +159,15 @@ class BaseAgent:
         lines: list[str] = []
         for ex in examples:
             title = ex.get("title", "")
+            full_proposal = ex.get("full_proposal", "")
+            source_paper = ex.get("source_paper", "")
+            if full_proposal:
+                lines.append(f"### {title}")
+                if source_paper:
+                    lines.append(f"Source paper: {source_paper}")
+                lines.append(full_proposal)
+                continue
+
             decision = ex.get("decision", "")
             reason = ex.get("reason", ex.get("question", ""))
             lines.append(f"- **{title}** → {decision}: {reason}")

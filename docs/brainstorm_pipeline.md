@@ -7,10 +7,14 @@ runs one or more iterative brainstorm/critique loops. The configured brainstorm 
 critic models are both lists. Every brainstorm model is paired with every critic model, and
 each pair runs an independent refinement loop of up to `brainstorm.max_rounds` rounds.
 
+The brainstorm model returns a strictly structured `BrainstormResult`, and the application
+assembles the proposal markdown from those fields before passing it to the critic or writing
+it to Notion.
+
 Each round produces one combined Notion child page containing:
 
 - run metadata (round number, brainstorm model, critic model)
-- the brainstorm proposal (`BrainstormResult.full_report`)
+- the brainstorm proposal assembled from the structured `BrainstormResult` fields
 - the critique (`CritiqueResult.full_report`)
 
 After all configured model pairs finish, the pipeline selects the strongest final critique,
@@ -37,15 +41,21 @@ in `models/paper.py`.
 The brainstorm agent returns one structured proposal with:
 
 - `paper_summary`
+- `response_to_critique`
 - `title`
 - `description`
 - `novelty_rationale`
 - `solution_sketch`
 - `experiment_plan`
 - `open_questions`
-- `full_report`
 
-This is a single proposal, not a list of research angles.
+Semantics:
+
+- `response_to_critique` is empty on round 1
+- `response_to_critique` is populated on round `N > 1` with a short summary of what changed
+- there is no brainstorm `full_report` field anymore; markdown is assembled in code
+
+This is a single proposal, not a list of research angles or a free-form markdown blob.
 
 ### `CritiqueResult`
 
@@ -70,10 +80,11 @@ For each `(brainstorm_model, critic_model)` pair:
 1. Gather paper context from Notion.
 2. Run the brainstorm agent for Round 1.
 3. Run the paired critic on the brainstorm output.
-4. Write a combined Notion child page for that round.
-5. If the critic meets the configured score thresholds, stop early for that pair.
-6. Otherwise, feed prior proposal/critique rounds back into the next brainstorm call.
-7. Stop after `brainstorm.max_rounds` even if thresholds are still not met.
+4. Assemble the brainstorm markdown report from the structured fields.
+5. Write a combined Notion child page for that round.
+6. If the critic meets the configured score thresholds, stop early for that pair.
+7. Otherwise, feed prior proposal/critique rounds back into the next brainstorm call.
+8. Stop after `brainstorm.max_rounds` even if thresholds are still not met.
 
 All model pairs run independently. The final paper-level DB update uses the strongest final
 critique across all pairs.
@@ -99,9 +110,14 @@ If no pair reaches the threshold after the configured number of rounds, the pape
 The brainstorm agent currently builds its user message from:
 
 1. `Abstract` property from the paper row
-2. full paper text extracted from the attached PDF or PDF/ArXiv URL when available
-3. child page `Math Summary`
-4. child page `Filter Report`
+2. prior brainstorm session pages when running with `--rerun`
+3. full paper text extracted from the attached PDF or PDF/ArXiv URL when available
+4. child page `Math Summary`
+5. child page `Filter Report`
+
+If `--rerun` is used, prior brainstorm round pages are compressed into a single context block
+and the new round numbering is offset so subsequent child-page titles continue from the
+existing rounds.
 
 ---
 
@@ -109,7 +125,19 @@ The brainstorm agent currently builds its user message from:
 
 ### Brainstorm Round 1
 
-The user message contains the paper context and asks for exactly one proposal.
+The user message contains the paper context, asks for exactly one proposal, and restates
+the exact `BrainstormResult` field contract at the end of the prompt.
+
+The restated contract requires exactly these fields:
+
+- `paper_summary`
+- `response_to_critique` as an empty string
+- `title`
+- `description`
+- `novelty_rationale`
+- `solution_sketch`
+- `experiment_plan`
+- `open_questions`
 
 ### Brainstorm Round N > 1
 
@@ -119,6 +147,10 @@ The user message contains:
 - all prior brainstorm reports for that pair
 - all prior critique reports for that pair
 - an explicit instruction to refine the proposal and explain what changed
+- the exact `BrainstormResult` field contract restated at the end of the prompt
+
+For refinement rounds, the contract specifically requires `response_to_critique` to contain
+a short summary of the changes made in response to the prior critique.
 
 ### Critique Round N
 
@@ -141,6 +173,17 @@ Each page contains:
 - `## Run Metadata`
 - `## Proposal`
 - `## Critique`
+
+The assembled `## Proposal` section has this structure:
+
+- `## Paper Summary`
+- optional `## Response to Critique`
+- `1. Title`
+- `2. Problem Statement`
+- `3. Motivation & Hypothesis`
+- `4. Proposed Method`
+- `5. Experiment Plan`
+- `**Open Questions**`
 
 At the paper-row level, the pipeline updates:
 
@@ -186,4 +229,5 @@ Filter:Pass / Brainstorming
     -> Needs Review  (no pair meets thresholds after max rounds)
 ```
 
-The pipeline also accepts papers already in `Brainstorming`, so interrupted runs can be retried.
+The pipeline also accepts papers already in `Brainstorming`, and with `--rerun` it also accepts
+papers in `Critiqued` or `Needs Review` so interrupted or low-quality runs can be re-brainstormed.

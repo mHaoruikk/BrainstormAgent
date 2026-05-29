@@ -29,10 +29,9 @@ import arxiv
 import httpx
 from pypdf import PdfReader
 from pydantic import BaseModel
-from pydantic_ai import Agent
 
 from agents.base import BaseAgent
-from config import config
+from llm_clients import make_client
 from models.paper import PaperMetadata
 from notion.client import NotionClient
 from notion.schema import Props, Status, prop_title, prop_text, prop_date, prop_url, prop_select
@@ -99,9 +98,10 @@ class PaperIngestionAgent(BaseAgent):
         super().__init__(instruction_file=None)  # No per-agent instruction file needed
         self.notion = notion
         self._arxiv_client = arxiv.Client()
-        # LLM agent for PDF metadata extraction — only called as last resort
-        self._llm_agent: Agent = Agent(
-            model=config.models.ingestion,
+        # LLM client for PDF metadata extraction — only called as last resort.
+        # Backend (API vs Claude Code / Codex CLI) is driven by config.clients.ingestion.
+        self._llm_agent = make_client(
+            agent_key="ingestion",
             output_type=PDFMetadataExtraction,
             system_prompt=(
                 "You are a precise academic metadata extractor. "

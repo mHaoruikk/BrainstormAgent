@@ -57,13 +57,16 @@ class FilterResult(BaseModel):
 class BrainstormResult(BaseModel):
     """Structured output from one round of the Brainstorm Agent."""
     paper_summary: str = Field(description="3-sentence summary of the paper's core mechanism, written for a causal-inference audience")
+    response_to_critique: str = Field(
+        default="",
+        description="For rounds >1 only: brief summary of what changed in response to the prior critique; leave empty on round 1",
+    )
     title: str = Field(description="Section 1 — concise, specific research direction title")
     description: str = Field(description="Section 2 — Problem Statement: the concrete gap or limitation, formally stated")
     novelty_rationale: str = Field(description="Section 3 — Motivation & Hypothesis: why important, why novel, the central causal hypothesis and key lever")
     solution_sketch: str = Field(description="Section 4 — Proposed Method: formal setting, estimator or algorithm, key technical idea (use math notation)")
     experiment_plan: str = Field(description="Section 5 — Experiment Plan: datasets, baselines, primary metrics, potential benchmarks")
     open_questions: list[str] = Field(default_factory=list, description="2–3 open questions remaining after the proposal sketch")
-    full_report: str = Field(description="Complete Markdown proposal following the standard format, written to a Notion child page")
 
 
 # ---------------------------------------------------------------------------
