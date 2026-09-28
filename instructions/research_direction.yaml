@@ -1,18 +1,19 @@
 # Research Inclination — shared context injected into every agent's system prompt.
 # Edit this file to change the research theme for all agents at once.
 
-title: "Combining Causal Inference with LLMs and Agents"
+title: "Statistical Inference for LLMs and Multi-Agent Systems"
 
 description: |
-  We are a small research group focused on causal inference. Our goal is to find
-  research opportunities at the intersection of causality and large language models
-  or AI agents. We are NOT interested in scaling pre-training. We ARE interested in
-  using causal tools to improve LLM reasoning, robustness, alignment, or to use
-  LLMs as tools inside causal pipelines.
+  We are a small research group studying statistically principled evaluation
+  and inference for LLMs and agents, especially latent payoff games learned
+  from preference-only or logged interaction data. We are NOT interested in
+  scaling pre-training. Causal inference remains a strength, alongside
+  semiparametric statistics and game theory.
 
-  The ideal paper provides a hook for applying or extending causal methods
-  (SCMs, do-calculus, instrumental variables, difference-in-differences, causal
-  representation learning) to a problem in the LLM or agent space.
+  The ideal paper develops an identifiable target, estimator, or uncertainty
+  guarantee for agent behavior or interaction. A conventional causal hook
+  (SCMs, IVs, treatment effects) is welcome but not required when the
+  contribution is rigorous game-theoretic or statistical inference.
 
 researcher_profile: |
   Small team (1–2 researchers). Strong background in causal inference.
@@ -22,12 +23,14 @@ researcher_profile: |
 
 non_goals:
   - Pre-training or fine-tuning LLMs from scratch on massive data
-  - Pure NLP tasks with no causal framing
+  - Pure NLP tasks with no statistical or game-theoretic inference
   - Hardware, systems, or infrastructure research
   - Papers requiring >8 A100s to reproduce key results
   - Research that requires large-scale evaluation on benchmarks
 
 goals:
+  - Preference-only evaluation of agents through contextual latent payoff games
+  - Estimation and inference for Nash or maximal-lottery targets and exploitability
   - Causal reasoning in LLM inference pipelines
   - Using causal methods to diagnose or improve LLM behavior (robustness, spurious correlations)
   - Causal structure in agent decision-making and planning
@@ -35,6 +38,16 @@ goals:
   - Causal representation learning applied to LLM embeddings
 
 topics:
+  # --- Latent games and multi-agent evaluation ---
+  - Contextual dueling from logged pairwise preferences with selective comparisons
+  - Identifying latent, possibly intransitive payoff games from heterogeneous feedback
+  - Contextual Nash equilibria and maximal lotteries for agent evaluation and routing
+  - Exploitability and equilibrium value estimation under distribution shift
+  - Differentiability and stability of equilibrium maps, including boundary cases
+  - Efficient influence functions, orthogonal scores, and cross-fitting for payoff and equilibrium inference
+  - Semiparametric efficiency bounds and uncertainty quantification for multi-agent behavior
+  - Partial identification of equilibria when comparisons or overlap are insufficient
+
   # --- LLM feedback, evaluation, and RLHF ---
   - Statistical ranking from pairwise interaction or preference data
   - Identifiability of causal effects from LLM-generated or annotator preference labels
